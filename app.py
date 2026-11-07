@@ -96,11 +96,14 @@ if check_password():
         "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。",
         "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。",
         "作戦会議": (
-            "あなたは作戦会議システムです。「専属執事」と「現代軍師」の2人の視点を同時に展開してください。"
-            "必ず以下の形式で出力してください：\n"
-            "---BUTLER---\n(執事の意見)\n\n"
-            "---GENERAL---\n(軍師の意見)\n\n"
-            "---SUMMARY---\n(総括・作戦案)"
+            "あなたは作戦会議システムです。必ず「専属執事」と「現代軍師」の両視点から発言してください。\n"
+            "【出力形式の厳守】回答は必ず以下のタグで正確に分割して出力してください（他の挨拶や雑談は含めないでください）：\n\n"
+            "---BUTLER---\n"
+            "(執事としての意見・言葉遣い)\n\n"
+            "---GENERAL---\n"
+            "(軍師としての意見・言葉遣い)\n\n"
+            "---SUMMARY---\n"
+            "(全体の総括・最終的な推奨作戦案)"
         ),
         "防衛AIステータス": "あなたは独立した防衛管理AIです。機械的・客観的なシステムレポートのみを行ってください。"
     }
@@ -129,19 +132,52 @@ if check_password():
     st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE: {mode}</p>", unsafe_allow_html=True)
     messages = st.session_state.chat_history[mode]
 
+    # アバター定義
     u_avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
     b_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Butler"
     g_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=General"
     s_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Strategy"
 
+    # メッセージ表示関数
+    def render_assistant_reply(content, current_mode):
+        if current_mode == "作戦会議" and "---BUTLER---" in content and "---GENERAL---" in content:
+            try:
+                parts = content.split("---GENERAL---")
+                butler_text = parts[0].replace("---BUTLER---", "").strip()
+                
+                remaining = parts[1].split("---SUMMARY---")
+                general_text = remaining[0].strip()
+                summary_text = remaining[1].strip() if len(remaining) > 1 else ""
+
+                with st.chat_message("assistant", avatar=b_avatar):
+                    st.markdown("**🛡️ 専属執事**")
+                    st.write(butler_text)
+
+                with st.chat_message("assistant", avatar=g_avatar):
+                    st.markdown("**⚔️ 現代軍師**")
+                    st.write(general_text)
+
+                if summary_text:
+                    with st.chat_message("assistant", avatar=s_avatar):
+                        st.markdown("**📊 総括・作戦案**")
+                        st.write(summary_text)
+            except Exception:
+                with st.chat_message("assistant", avatar=b_avatar):
+                    st.write(content)
+        else:
+            icon = b_avatar if current_mode == "専属執事" else (g_avatar if current_mode == "現代軍師" else s_avatar)
+            with st.chat_message("assistant", avatar=icon):
+                st.write(content)
+
+    # 会話履歴の描画
     for m in messages:
         if m["role"] == "user":
             with st.chat_message("user", avatar=u_avatar):
                 st.write(m["content"])
         else:
-            with st.chat_message("assistant", avatar=b_avatar):
-                st.write(m["content"])
+            render_assistant_reply(m["content"], mode)
 
+    # ユーザー入力
     if prompt := st.chat_input("指示を入力..."):
         messages.append({"role": "user", "content": prompt})
         st.session_state.shared_notes.append(f"[{mode}] {prompt}")
@@ -149,42 +185,43 @@ if check_password():
         with st.chat_message("user", avatar=u_avatar):
             st.write(prompt)
 
-        with st.chat_message("assistant", avatar=b_avatar):
-            try:
-                full_msgs = [{"role": "system", "content": system_prompt}]
-                for m in messages:
-                    full_msgs.append({"role": m["role"], "content": m["content"]})
+        try:
+            full_msgs = [{"role": "system", "content": system_prompt}]
+            for m in messages:
+                full_msgs.append({"role": m["role"], "content": m["content"]})
 
-                res = client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=full_msgs
-                )
-                reply = res.choices[0].message.content
+            res = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=full_msgs
+            )
+            reply = res.choices[0].message.content
 
-                if "```calendar_event" in reply and mode != "防衛AIステータス":
-                    parts = reply.split("```calendar_event")
-                    reply = parts[0].strip()
-                    try:
-                        ev = json.loads(parts[1].split("```")[0].strip())
-                        srv = get_calendar_service()
-                        if srv:
-                            body = {
-                                "summary": ev.get("summary", "予定"),
-                                "description": ev.get("description", ""),
-                                "start": {"dateTime": ev["start"], "timeZone": "Asia/Tokyo"},
-                                "end": {"dateTime": ev["end"], "timeZone": "Asia/Tokyo"},
-                                "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
-                            }
-                            srv.events().insert(calendarId=st.secrets["google"].get("calendar_id", "primary"), body=body).execute()
-                            reply += "\n\n✅ カレンダー登録＆前日通知設定完了"
-                    except Exception as ex:
-                        reply += f"\n\n⚠️ カレンダーエラー: {ex}"
+            if "```calendar_event" in reply and mode != "防衛AIステータス":
+                parts = reply.split("```calendar_event")
+                reply = parts[0].strip()
+                try:
+                    ev = json.loads(parts[1].split("```")[0].strip())
+                    srv = get_calendar_service()
+                    if srv:
+                        body = {
+                            "summary": ev.get("summary", "予定"),
+                            "description": ev.get("description", ""),
+                            "start": {"dateTime": ev["start"], "timeZone": "Asia/Tokyo"},
+                            "end": {"dateTime": ev["end"], "timeZone": "Asia/Tokyo"},
+                            "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
+                        }
+                        srv.events().insert(calendarId=st.secrets["google"].get("calendar_id", "primary"), body=body).execute()
+                        reply += "\n\n✅ カレンダー登録＆前日通知設定完了"
+                except Exception as ex:
+                    reply += f"\n\n⚠️ カレンダーエラー: {ex}"
 
-                st.write(reply)
-                messages.append({"role": "assistant", "content": reply})
-                st.session_state.shared_notes.append(f"[{mode}] {reply[:30]}")
-            except Exception as e:
-                st.error(f"エラー: {e}")
+            # 新規応答の表示
+            render_assistant_reply(reply, mode)
+
+            messages.append({"role": "assistant", "content": reply})
+            st.session_state.shared_notes.append(f"[{mode}] {reply[:30]}")
+        except Exception as e:
+            st.error(f"エラー: {e}")
  
 
 
