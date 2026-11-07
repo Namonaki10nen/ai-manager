@@ -11,7 +11,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# カッコいいSF司令部風カスタムCSS
+# カッコいいSF司令部風 ＆ 洗練されたチャット吹き出し用CSS
 st.markdown("""
 <style>
     /* 全体の背景と文字色 */
@@ -29,26 +29,31 @@ st.markdown("""
         background-color: #1e293b !important;
         color: #f8fafc !important;
         border: 1px solid #334155 !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
     }
     /* ボタンのスタイリング */
     .stButton button {
         background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
         color: white;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
         font-weight: bold;
     }
     .stButton button:hover {
         background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
     }
-    /* チャットメッセージの見た目微調整 */
+    /* チャットメッセージの見た目（吹き出し風） */
     [data-testid="stChatMessage"] {
-        background-color: #111827;
+        background: linear-gradient(135deg, #111827 0%, #1a2333 100%);
         border: 1px solid #1f2937;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 8px;
+        border-radius: 14px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+    }
+    /* アバター（アイコン）の丸みとサイズ調整 */
+    [data-testid="stChatMessage"] img {
+        border-radius: 50%;
+        object-fit: cover;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -107,7 +112,7 @@ if check_password():
     if "shared_notes" not in st.session_state:
         st.session_state.shared_notes = []
 
-    # キャラクタープロンプト（鉄壁の縛り）
+    # キャラクタープロンプト（鉄壁の縛り ＆ 作戦会議用セパレート指定）
     system_prompts = {
         "専属執事": (
             "あなたは主人の身の回りを世話する最高峰の専属執事です。"
@@ -122,10 +127,13 @@ if check_password():
         "作戦会議": (
             "あなたは司令部の作戦会議システムです。これまでの全情報の共有ノートを踏まえてください。"
             "ユーザーの相談に対し、「専属執事」と「現代軍師」の2人の異なる人格・視点が同時に並存して議論を行ってください。"
-            "回答は必ず以下のフォーマットで出力してください：\n"
-            "【執事の意見】\n(執事の立場から、主人を気遣う丁寧なトーン)\n\n"
-            "【軍師の意見】\n(軍師の立場から、冷徹かつ戦略的なトーン)\n\n"
-            "【総括・作戦案】\n(2人の意見を統合した最終的な推奨アクション)"
+            "必ず以下のマークアップ区切りを用いて、1人ずつ独立して発言する形式で出力してください：\n"
+            "---BUTLER---\n"
+            "(執事の立場から、主人を気遣う丁寧なトーンでの発言)\n\n"
+            "---GENERAL---\n"
+            "(軍師の立場から、冷徹かつ戦略的なトーンでの発言)\n\n"
+            "---SUMMARY---\n"
+            "(2人の意見を統合した最終的な推奨作戦案)"
         ),
         "防衛AIステータス": (
             "あなたは司令部の独立した防衛・治安維持管理AIです。"
@@ -164,18 +172,59 @@ if check_password():
     # 現在選択しているモード専用の会話履歴を取得
     current_messages = st.session_state.chat_history[mode]
 
+    # アイコン用の画像URL（カッコいい＆かわいいちびキャラ風アバター）
+    avatar_user = "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+    avatar_butler = "https://api.dicebear.com/7.x/bottts/svg?seed=Butler"
+    avatar_general = "https://api.dicebear.com/7.x/bottts/svg?seed=General"
+    avatar_strategy = "https://api.dicebear.com/7.x/bottts/svg?seed=Strategy"
+    avatar_system = "https://api.dicebear.com/7.x/identicon/svg?seed=Shield"
+
     for message in current_messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+        role = message["role"]
+        content = message["content"]
+        
+        if role == "user":
+            with st.chat_message("user", avatar=avatar_user):
+                st.write(content)
+        else:
+            # 作戦会議モードの個別分割表示処理
+            if "---BUTLER---" in content and "---GENERAL---" in content:
+                try:
+                    parts = content.split("---GENERAL---")
+                    butler_text = parts[0].replace("---BUTLER---", "").strip()
+                    
+                    remaining = parts[1].split("---SUMMARY---")
+                    general_text = remaining[0].strip()
+                    summary_text = remaining[1].strip() if len(remaining) > 1 else ""
+
+                    with st.chat_message("assistant", avatar=avatar_butler):
+                        st.markdown("**🛡️ Butler (専属執事)**")
+                        st.write(butler_text)
+
+                    with st.chat_message("assistant", avatar=avatar_general):
+                        st.markdown("**⚔️ General (現代軍師)**")
+                        st.write(general_text)
+
+                    if summary_text:
+                        with st.chat_message("assistant", avatar=avatar_strategy):
+                            st.markdown("**📊 Total Strategy (総括・作戦案)**")
+                            st.write(summary_text)
+                except Exception:
+                    with st.chat_message("assistant", avatar=avatar_system):
+                        st.write(content)
+            else:
+                icon = avatar_butler if mode == "専属執事" else (avatar_general if mode == "現代軍師" else avatar_system)
+                with st.chat_message("assistant", avatar=icon):
+                    st.write(content)
 
     if prompt := st.chat_input("司令部へ指示または相談を入力してください..."):
         current_messages.append({"role": "user", "content": prompt})
         st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
 
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=avatar_user):
             st.write(prompt)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=avatar_butler if mode == "専属執事" else (avatar_general if mode == "現代軍師" else avatar_system)):
             try:
                 full_messages = [{"role": "system", "content": current_system_prompt}]
                 for m in current_messages:
@@ -209,25 +258,7 @@ if check_password():
                                 },
                                 "end": {
                                     "dateTime": event_data["end"],
-                                    "timeZone": "Asia/Tokyo",
-                                },
-                                "reminders": {
-                                    "useDefault": False,
-                                    "overrides": [
-                                        {"method": "popup", "minutes": 1440}
-                                    ]
-                                }
-                            }
-                            service.events().insert(calendarId=calendar_id, body=event_body).execute()
-                            display_text += "\n\n✅ **[SYSTEM] カレンダーへの予定書き込みおよび前日リマインダーのセットが完了しました。**"
-                    except Exception as cal_err:
-                        display_text += f"\n\n⚠️ [ERROR] カレンダー登録エラー: {cal_err}"
-
-                st.write(display_text)
-                current_messages.append({"role": "assistant", "content": display_text})
-                st.session_state.shared_notes.append(f"[{mode}] 回答: {display_text[:40]}...")
-            except Exception as e:
-                st.error(f"エラーが発生しました: {e}")
+ 
 
 
 
