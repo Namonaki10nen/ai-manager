@@ -1,7 +1,6 @@
 import streamlit as st
 from groq import Groq
 
-# パスワード認証
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -42,7 +41,7 @@ if check_password():
         with st.chat_message("assistant"):
             try:
                 completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-120b",
                     messages=[
                         {"role": m["role"], "content": m["content"]} 
                         for m in st.session_state.messages
@@ -53,4 +52,3 @@ if check_password():
                 st.session_state.messages.append({"role": "assistant", "content": reply})
             except Exception as e:
                 st.error(f"エラーが発生しました: {e}")
-
