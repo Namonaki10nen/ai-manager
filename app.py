@@ -1,5 +1,8 @@
+import json
 import streamlit as st
 from groq import Groq
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 def check_password():
     if "authenticated" not in st.session_state:
@@ -15,6 +18,16 @@ def check_password():
                 st.error("パスワードが違います")
         return False
     return True
+
+# Google Calendar API クライアント取得
+def get_calendar_service():
+    try:
+        creds_json = json.loads(st.secrets["google"]["credentials"])
+        scopes = ["https://www.googleapis.com/auth/calendar"]
+        creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
+        return build("calendar", "v3", credentials=creds)
+    except Exception:
+        return None
 
 if check_password():
     st.title("AI Manager")
@@ -33,7 +46,7 @@ if check_password():
         ["専属執事", "現代軍師", "作戦会議", "防衛AIステータス"]
     )
 
-    # 1. モードごとに完全に独立した会話履歴を管理する辞書
+    # 1. モードごとに完全に独立した会話履歴
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = {}
 
@@ -44,7 +57,7 @@ if check_password():
     if "shared_notes" not in st.session_state:
         st.session_state.shared_notes = []
 
-    # 各モードのキャラクター指示（防衛AIも完全に独立・特化）
+    # キャラクタープロンプト（鉄壁の縛り）
     system_prompts = {
         "専属執事": (
             "あなたは主人の身の回りを世話する最高峰の専属執事です。"
@@ -74,12 +87,26 @@ if check_password():
 
     base_prompt = system_prompts.get(mode, "あなたは優秀なアシスタントです。")
 
+    # カレンダー自動連携の指示（防衛AIモード以外で有効化）
+    calendar_instruction = (
+        "\n\n【Googleカレンダー自動連携コマンド】\n"
+        "ユーザーから明確な予定登録の指示（日時と内容）があった場合、通常の回答の末尾に必ず以下のJSONフォーマットを出力してください。\n"
+        "```calendar_event\n"
+        "{\n"
+        '  "summary": "予定のタイトル",\n'
+        '  "start": "YYYY-MM-DDTHH:MM:SS",\n'
+        '  "end": "YYYY-MM-DDTHH:MM:SS",\n'
+        '  "description": "メモ・詳細"\n'
+        "}\n"
+        "```"
+    )
+
     # 裏の共有ノートをシステムプロンプトにインジェクト
     shared_context = ""
     if st.session_state.shared_notes:
         shared_context = "\n\n【司令部全体の共有ノート（他モードでのやり取り）】\n" + "\n".join([f"- {note}" for note in st.session_state.shared_notes[-8:]])
 
-    current_system_prompt = base_prompt + shared_context
+    current_system_prompt = base_prompt + (calendar_instruction if mode != "防衛AIステータス" else "") + shared_context
 
     # 現在のモード名を表示
     st.subheader(f"現在のモード: 【{mode}】")
@@ -109,10 +136,48 @@ if check_password():
                     messages=full_messages
                 )
                 reply = completion.choices[0].message.content
-                st.write(reply)
-                
-                current_messages.append({"role": "assistant", "content": reply})
-                st.session_state.shared_notes.append(f"[{mode}] 回答: {reply[:40]}...")
+
+                # カレンダー登録ブロックの検出処理
+                display_text = reply
+                if "```calendar_event" in reply and mode != "防衛AIステータス":
+                    parts = reply.split("```calendar_event")
+                    display_text = parts[0].strip()
+                    event_json_str = parts[1].split("```")[0].strip()
+                    
+                    try:
+                        event_data = json.loads(event_json_str)
+                        service = get_calendar_service()
+                        calendar_id = st.secrets["google"].get("calendar_id", "primary")
+
+                        if service:
+                            # 前日リマインダー（24時間前＝1440分前通知）を設定してイベント作成
+                            event_body = {
+                                "summary": event_data.get("summary", "新規予定"),
+                                "description": event_data.get("description", ""),
+                                "start": {
+                                    "dateTime": event_data["start"],
+                                    "timeZone": "Asia/Tokyo",
+                                },
+                                "end": {
+                                    "dateTime": event_data["end"],
+                                    "timeZone": "Asia/Tokyo",
+                                },
+                                "reminders": {
+                                    "useDefault": False,
+                                    "overrides": [
+                                        {"method": "popup", "minutes": 1440} # 前日通知
+                                    ]
+                                }
+                            }
+                            service.events().insert(calendarId=calendar_id, body=event_body).execute()
+                            display_text += "\n\n✅ **Googleカレンダー（スマホ同期）に予定を書き込み、前日リマインダーをセットしました。**"
+                    except Exception as cal_err:
+                        display_text += f"\n\n⚠️ カレンダー登録エラー: {cal_err}"
+
+                st.write(display_text)
+                current_messages.append({"role": "assistant", "content": display_text})
+                st.session_state.shared_notes.append(f"[{mode}] 回答: {display_text[:40]}...")
             except Exception as e:
                 st.error(f"エラーが発生しました: {e}")
+
 
