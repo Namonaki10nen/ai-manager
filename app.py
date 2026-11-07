@@ -4,18 +4,68 @@ from groq import Groq
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
+# ページ全体のダーク＆サイバー風デザイン設定
+st.set_page_config(
+    page_title="AI Manager - Command Center",
+    page_icon="🛡️",
+    layout="centered"
+)
+
+# カッコいいSF司令部風カスタムCSS
+st.markdown("""
+<style>
+    /* 全体の背景と文字色 */
+    .stApp {
+        background-color: #0b0f19;
+        color: #e2e8f0;
+    }
+    /* サイドバーの背景 */
+    [data-testid="stSidebar"] {
+        background-color: #0f172a;
+        border-right: 1px solid #1e293b;
+    }
+    /* 入力フィールドのスタイリング */
+    .stTextInput input, .stChatInput input {
+        background-color: #1e293b !important;
+        color: #f8fafc !important;
+        border: 1px solid #334155 !important;
+        border-radius: 6px !important;
+    }
+    /* ボタンのスタイリング */
+    .stButton button {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+    .stButton button:hover {
+        background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+    }
+    /* チャットメッセージの見た目微調整 */
+    [data-testid="stChatMessage"] {
+        background-color: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
     if not st.session_state.authenticated:
-        password = st.text_input("パスワードを入力してください", type="password")
-        if st.button("ログイン"):
+        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🛡️ COMMAND CENTER ACCESS</h2>", unsafe_allow_html=True)
+        password = st.text_input("アクセスパスワードを入力してください", type="password")
+        if st.button("システム認証", use_container_width=True):
             if password == st.secrets.get("PASSWORD", ""):
                 st.session_state.authenticated = True
                 st.rerun()
             else:
-                st.error("パスワードが違います")
+                st.error("認証失敗：パスワードが一致しません")
         return False
     return True
 
@@ -30,7 +80,7 @@ def get_calendar_service():
         return None
 
 if check_password():
-    st.title("AI Manager")
+    st.markdown("<h1 style='color: #38bdf8; font-size: 1.8rem;'>⚡ AI MANAGER : 司令部システム</h1>", unsafe_allow_html=True)
 
     api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
@@ -40,7 +90,7 @@ if check_password():
     client = Groq(api_key=api_key)
 
     # サイドバーのコントロール・モード選択
-    st.sidebar.title("司令部コントロール")
+    st.sidebar.markdown("<h3 style='color: #38bdf8;'>🔧 司令部コントロール</h3>", unsafe_allow_html=True)
     mode = st.sidebar.radio(
         "モード選択",
         ["専属執事", "現代軍師", "作戦会議", "防衛AIステータス"]
@@ -109,7 +159,7 @@ if check_password():
     current_system_prompt = base_prompt + (calendar_instruction if mode != "防衛AIステータス" else "") + shared_context
 
     # 現在のモード名を表示
-    st.subheader(f"現在のモード: 【{mode}】")
+    st.markdown(f"<p style='color: #38bdf8; font-weight: bold; border-left: 3px solid #38bdf8; padding-left: 8px;'>ACTIVE MODE : 【 {mode} 】</p>", unsafe_allow_html=True)
 
     # 現在選択しているモード専用の会話履歴を取得
     current_messages = st.session_state.chat_history[mode]
@@ -150,7 +200,6 @@ if check_password():
                         calendar_id = st.secrets["google"].get("calendar_id", "primary")
 
                         if service:
-                            # 前日リマインダー（24時間前＝1440分前通知）を設定してイベント作成
                             event_body = {
                                 "summary": event_data.get("summary", "新規予定"),
                                 "description": event_data.get("description", ""),
@@ -165,19 +214,20 @@ if check_password():
                                 "reminders": {
                                     "useDefault": False,
                                     "overrides": [
-                                        {"method": "popup", "minutes": 1440} # 前日通知
+                                        {"method": "popup", "minutes": 1440}
                                     ]
                                 }
                             }
                             service.events().insert(calendarId=calendar_id, body=event_body).execute()
-                            display_text += "\n\n✅ **Googleカレンダー（スマホ同期）に予定を書き込み、前日リマインダーをセットしました。**"
+                            display_text += "\n\n✅ **[SYSTEM] カレンダーへの予定書き込みおよび前日リマインダーのセットが完了しました。**"
                     except Exception as cal_err:
-                        display_text += f"\n\n⚠️ カレンダー登録エラー: {cal_err}"
+                        display_text += f"\n\n⚠️ [ERROR] カレンダー登録エラー: {cal_err}"
 
                 st.write(display_text)
                 current_messages.append({"role": "assistant", "content": display_text})
                 st.session_state.shared_notes.append(f"[{mode}] 回答: {display_text[:40]}...")
             except Exception as e:
                 st.error(f"エラーが発生しました: {e}")
+
 
 
