@@ -162,8 +162,29 @@ if check_password():
                 reply = res.choices[0].message.content
 
                 if "```calendar_event" in reply and mode != "防衛AIステータス":
-                    parts = reply.split("
+                    parts = reply.split("```calendar_event")
+                    reply = parts[0].strip()
+                    try:
+                        ev = json.loads(parts[1].split("```")[0].strip())
+                        srv = get_calendar_service()
+                        if srv:
+                            body = {
+                                "summary": ev.get("summary", "予定"),
+                                "description": ev.get("description", ""),
+                                "start": {"dateTime": ev["start"], "timeZone": "Asia/Tokyo"},
+                                "end": {"dateTime": ev["end"], "timeZone": "Asia/Tokyo"},
+                                "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
+                            }
+                            srv.events().insert(calendarId=st.secrets["google"].get("calendar_id", "primary"), body=body).execute()
+                            reply += "\n\n✅ カレンダー登録＆前日通知設定完了"
+                    except Exception as ex:
+                        reply += f"\n\n⚠️ カレンダーエラー: {ex}"
 
+                st.write(reply)
+                messages.append({"role": "assistant", "content": reply})
+                st.session_state.shared_notes.append(f"[{mode}] {reply[:30]}")
+            except Exception as e:
+                st.error(f"エラー: {e}")
  
 
 
