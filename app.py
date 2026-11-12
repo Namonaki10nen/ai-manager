@@ -1,4 +1,5 @@
 import json
+import os
 import streamlit as st
 from groq import Groq
 from google.oauth2.service_account import Credentials
@@ -73,6 +74,25 @@ def get_calendar_service():
     except Exception:
         return None
 
+# 記憶（共有ノート）をローカルファイルに永続化する関数
+MEMORY_FILE = "shared_memory.json"
+
+def load_shared_memory():
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_shared_memory(notes):
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(notes, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
 if check_password():
     st.markdown("<h1 style='color: #38bdf8; font-size: 1.6rem;'>⚡ AI MANAGER : 司令部システム</h1>", unsafe_allow_html=True)
 
@@ -90,10 +110,11 @@ if check_password():
         st.session_state.chat_history = {}
     if mode not in st.session_state.chat_history:
         st.session_state.chat_history[mode] = []
+        
+    # 永続化された共有ノートの読み込み
     if "shared_notes" not in st.session_state:
-        st.session_state.shared_notes = []
+        st.session_state.shared_notes = load_shared_memory()
 
-    # 起動時の自動ブリーフィング（まだそのモードに挨拶がない場合、自動で挨拶生成を走らせる）
     if "welcomed" not in st.session_state:
         st.session_state.welcomed = set()
 
@@ -127,7 +148,7 @@ if check_password():
 
     notes = ""
     if st.session_state.shared_notes:
-        notes = "\n\n【司令部の共有ノート・これまでの経緯】\n" + "\n".join(st.session_state.shared_notes[-8:])
+        notes = "\n\n【司令部の共有ノート・これまでの経緯（長期記憶）】\n" + "\n".join(st.session_state.shared_notes[-10:])
 
     system_prompt = base + cal_rule + notes
 
@@ -169,11 +190,11 @@ if check_password():
             with st.chat_message("assistant", avatar=icon):
                 st.write(content)
 
-    # 初回起動時（またはモード切り替え時）の自動ブリーフィング
+    # 初回起動時の自動ブリーフィング
     if mode not in st.session_state.welcomed and not messages:
         st.session_state.welcomed.add(mode)
         now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        welcome_prompt = f"現在時刻は {now_str} です。主人（ユーザー）が司令部にログインしました。このモードの役割に則って、本日の状況やサポートの意気込みを簡潔にブリーフィング（挨拶）してください。"
+        welcome_prompt = f"現在時刻は {now_str} です。主人（ユーザー）が司令部にログインしました。これまでの共有ノートの記憶を踏まえ、本日の状況やサポートの意気込みを簡潔にブリーフィング（挨拶）してください。"
         
         try:
             res = client.chat.completions.create(
@@ -200,6 +221,7 @@ if check_password():
     if prompt := st.chat_input("司令部へ指示または相談を入力してください..."):
         messages.append({"role": "user", "content": prompt})
         st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
+        save_shared_memory(st.session_state.shared_notes)
 
         with st.chat_message("user", avatar=u_avatar):
             st.write(prompt)
@@ -238,6 +260,7 @@ if check_password():
 
             messages.append({"role": "assistant", "content": reply})
             st.session_state.shared_notes.append(f"[{mode}] AI: {reply[:35]}...")
+            save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
  
