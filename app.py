@@ -3,9 +3,10 @@ import streamlit as st
 from groq import Groq
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from datetime import datetime
 
 st.set_page_config(
-    page_title="AI Manager",
+    page_title="AI Manager - Command Center",
     page_icon="🛡️",
     layout="centered"
 )
@@ -51,9 +52,9 @@ def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     if not st.session_state.authenticated:
-        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🛡️ ACCESS CONTROL</h2>", unsafe_allow_html=True)
-        password = st.text_input("パスワードを入力", type="password")
-        if st.button("認証", use_container_width=True):
+        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>🛡️ COMMAND CENTER ACCESS</h2>", unsafe_allow_html=True)
+        password = st.text_input("アクセスパスワードを入力", type="password")
+        if st.button("システム認証", use_container_width=True):
             if password == st.secrets.get("PASSWORD", ""):
                 st.session_state.authenticated = True
                 st.rerun()
@@ -73,7 +74,7 @@ def get_calendar_service():
         return None
 
 if check_password():
-    st.markdown("<h1 style='color: #38bdf8; font-size: 1.6rem;'>⚡ AI MANAGER</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #38bdf8; font-size: 1.6rem;'>⚡ AI MANAGER : 司令部システム</h1>", unsafe_allow_html=True)
 
     api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
@@ -82,8 +83,8 @@ if check_password():
 
     client = Groq(api_key=api_key)
 
-    st.sidebar.markdown("<h3 style='color: #38bdf8;'>コントロール</h3>", unsafe_allow_html=True)
-    mode = st.sidebar.radio("モード", ["専属執事", "現代軍師", "作戦会議", "防衛AIステータス"])
+    st.sidebar.markdown("<h3 style='color: #38bdf8;'>🔧 司令部コントロール</h3>", unsafe_allow_html=True)
+    mode = st.sidebar.radio("モード選択", ["専属執事", "現代軍師", "作戦会議", "防衛AIステータス"])
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = {}
@@ -92,18 +93,19 @@ if check_password():
     if "shared_notes" not in st.session_state:
         st.session_state.shared_notes = []
 
+    # 起動時の自動ブリーフィング（まだそのモードに挨拶がない場合、自動で挨拶生成を走らせる）
+    if "welcomed" not in st.session_state:
+        st.session_state.welcomed = set()
+
     prompts = {
         "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。",
         "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。",
         "作戦会議": (
             "あなたは作戦会議システムです。必ず「専属執事」と「現代軍師」の両視点から発言してください。\n"
-            "【出力形式の厳守】回答は必ず以下のタグで正確に分割して出力してください（他の挨拶や雑談は含めないでください）：\n\n"
-            "---BUTLER---\n"
-            "(執事としての意見・言葉遣い)\n\n"
-            "---GENERAL---\n"
-            "(軍師としての意見・言葉遣い)\n\n"
-            "---SUMMARY---\n"
-            "(全体の総括・最終的な推奨作戦案)"
+            "【出力形式の厳守】回答は必ず以下のタグで正確に分割して出力してください：\n\n"
+            "---BUTLER---\n(執事としての意見・丁寧な気配り)\n\n"
+            "---GENERAL---\n(軍師としての意見・戦略的分析)\n\n"
+            "---SUMMARY---\n(全体の総括・推奨作戦)"
         ),
         "防衛AIステータス": "あなたは独立した防衛管理AIです。機械的・客観的なシステムレポートのみを行ってください。"
     }
@@ -125,20 +127,18 @@ if check_password():
 
     notes = ""
     if st.session_state.shared_notes:
-        notes = "\n\n【共有ノート】\n" + "\n".join(st.session_state.shared_notes[-6:])
+        notes = "\n\n【司令部の共有ノート・これまでの経緯】\n" + "\n".join(st.session_state.shared_notes[-8:])
 
     system_prompt = base + cal_rule + notes
 
-    st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE: {mode}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】</p>", unsafe_allow_html=True)
     messages = st.session_state.chat_history[mode]
 
-    # アバター定義
     u_avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
     b_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Butler"
     g_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=General"
     s_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Strategy"
 
-    # メッセージ表示関数
     def render_assistant_reply(content, current_mode):
         if current_mode == "作戦会議" and "---BUTLER---" in content and "---GENERAL---" in content:
             try:
@@ -169,7 +169,26 @@ if check_password():
             with st.chat_message("assistant", avatar=icon):
                 st.write(content)
 
-    # 会話履歴の描画
+    # 初回起動時（またはモード切り替え時）の自動ブリーフィング
+    if mode not in st.session_state.welcomed and not messages:
+        st.session_state.welcomed.add(mode)
+        now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        welcome_prompt = f"現在時刻は {now_str} です。主人（ユーザー）が司令部にログインしました。このモードの役割に則って、本日の状況やサポートの意気込みを簡潔にブリーフィング（挨拶）してください。"
+        
+        try:
+            res = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": welcome_prompt}
+                ]
+            )
+            welcome_reply = res.choices[0].message.content
+            messages.append({"role": "assistant", "content": welcome_reply})
+        except Exception:
+            pass
+
+    # 履歴描画
     for m in messages:
         if m["role"] == "user":
             with st.chat_message("user", avatar=u_avatar):
@@ -178,9 +197,9 @@ if check_password():
             render_assistant_reply(m["content"], mode)
 
     # ユーザー入力
-    if prompt := st.chat_input("指示を入力..."):
+    if prompt := st.chat_input("司令部へ指示または相談を入力してください..."):
         messages.append({"role": "user", "content": prompt})
-        st.session_state.shared_notes.append(f"[{mode}] {prompt}")
+        st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
 
         with st.chat_message("user", avatar=u_avatar):
             st.write(prompt)
@@ -211,15 +230,14 @@ if check_password():
                             "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
                         }
                         srv.events().insert(calendarId=st.secrets["google"].get("calendar_id", "primary"), body=body).execute()
-                        reply += "\n\n✅ カレンダー登録＆前日通知設定完了"
+                        reply += "\n\n✅ **[SYSTEM] カレンダー登録＆前日通知設定完了**"
                 except Exception as ex:
                     reply += f"\n\n⚠️ カレンダーエラー: {ex}"
 
-            # 新規応答の表示
             render_assistant_reply(reply, mode)
 
             messages.append({"role": "assistant", "content": reply})
-            st.session_state.shared_notes.append(f"[{mode}] {reply[:30]}")
+            st.session_state.shared_notes.append(f"[{mode}] AI: {reply[:35]}...")
         except Exception as e:
             st.error(f"エラー: {e}")
  
