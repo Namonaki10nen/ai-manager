@@ -68,7 +68,7 @@ def get_calendar_service():
     try:
         creds_json = json.loads(st.secrets["google"]["credentials"])
         creds = Credentials.from_service_account_info(
-            creds_json, scopes=["https://www.googleapis.com/auth/calendar"]
+            creds_json, scopes=["[https://www.googleapis.com/auth/calendar](https://www.googleapis.com/auth/calendar)"]
         )
         return build("calendar", "v3", credentials=creds)
     except Exception:
@@ -130,16 +130,22 @@ if check_password():
     }
 
     base = prompts.get(mode, "あなたは優秀なアシスタントです。")
+    
+    # 強制力を極限まで高めたカレンダー出力ルール
     cal_rule = ""
     if mode != "防衛AIステータス":
+        now_date_str = datetime.now().strftime("%Y-%m-%d")
         cal_rule = (
-            "\n\n【最重要ルール：カレンダー登録】\n"
-            "ユーザーが予定の登録・追加を求めた場合、通常の返答文の後に必ず以下の形式でコードブロックを出力してください。\n"
+            f"\n\n【絶対遵守：カレンダー連携機能】\n"
+            f"現在の日付は {now_date_str} です。\n"
+            "ユーザーが「予定を入れて」「〜の予定」「スケジュール追加」など、カレンダー登録を意図する発言をした場合、"
+            "通常の返答テキストの末尾に、**必ず以下のような正確なJSON形式のコードブロックを含めてください**。\n"
+            "これを怠るとシステムエラーになります。日付（YYYY-MM-DDTHH:MM:SS）は必ず現在の基準から算出して埋めてください。\n\n"
             "```calendar_event\n"
             "{\n"
             '  "summary": "予定のタイトル",\n'
-            '  "start": "YYYY-MM-DDTHH:MM:SS",\n'
-            '  "end": "YYYY-MM-DDTHH:MM:SS",\n'
+            '  "start": "2026-11-14T15:00:00",\n'
+            '  "end": "2026-11-14T16:00:00",\n'
             '  "description": "詳細"\n'
             "}\n"
             "```"
@@ -154,10 +160,10 @@ if check_password():
     st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】</p>", unsafe_allow_html=True)
     messages = st.session_state.chat_history[mode]
 
-    u_avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
-    b_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Butler"
-    g_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=General"
-    s_avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Strategy"
+    u_avatar = "[https://api.dicebear.com/7.x/avataaars/svg?seed=User](https://api.dicebear.com/7.x/avataaars/svg?seed=User)"
+    b_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=Butler](https://api.dicebear.com/7.x/bottts/svg?seed=Butler)"
+    g_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=General](https://api.dicebear.com/7.x/bottts/svg?seed=General)"
+    s_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=Strategy](https://api.dicebear.com/7.x/bottts/svg?seed=Strategy)"
 
     def render_assistant_reply(content, current_mode):
         if current_mode == "作戦会議" and "---BUTLER---" in content and "---GENERAL---" in content:
@@ -259,6 +265,5 @@ if check_password():
             save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
-
 
 
