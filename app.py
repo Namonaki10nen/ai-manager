@@ -74,7 +74,6 @@ def get_calendar_service():
     except Exception:
         return None
 
-# 記憶（共有ノート）をローカルファイルに永続化する関数
 MEMORY_FILE = "shared_memory.json"
 
 def load_shared_memory():
@@ -111,7 +110,6 @@ if check_password():
     if mode not in st.session_state.chat_history:
         st.session_state.chat_history[mode] = []
         
-    # 永続化された共有ノートの読み込み
     if "shared_notes" not in st.session_state:
         st.session_state.shared_notes = load_shared_memory()
 
@@ -135,10 +133,11 @@ if check_password():
     cal_rule = ""
     if mode != "防衛AIステータス":
         cal_rule = (
-            "\n\n予定登録の指示がある場合、回答の最後に必ず以下を出力せよ:\n"
+            "\n\n【最重要ルール：カレンダー登録】\n"
+            "ユーザーが予定の登録・追加を求めた場合、通常の返答文の後に必ず以下の形式でコードブロックを出力してください。\n"
             "```calendar_event\n"
             "{\n"
-            '  "summary": "タイトル",\n'
+            '  "summary": "予定のタイトル",\n'
             '  "start": "YYYY-MM-DDTHH:MM:SS",\n'
             '  "end": "YYYY-MM-DDTHH:MM:SS",\n'
             '  "description": "詳細"\n'
@@ -190,7 +189,6 @@ if check_password():
             with st.chat_message("assistant", avatar=icon):
                 st.write(content)
 
-    # 初回起動時の自動ブリーフィング
     if mode not in st.session_state.welcomed and not messages:
         st.session_state.welcomed.add(mode)
         now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
@@ -209,7 +207,6 @@ if check_password():
         except Exception:
             pass
 
-    # 履歴描画
     for m in messages:
         if m["role"] == "user":
             with st.chat_message("user", avatar=u_avatar):
@@ -217,7 +214,6 @@ if check_password():
         else:
             render_assistant_reply(m["content"], mode)
 
-    # ユーザー入力
     if prompt := st.chat_input("司令部へ指示または相談を入力してください..."):
         messages.append({"role": "user", "content": prompt})
         st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
@@ -263,7 +259,6 @@ if check_password():
             save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
- 
 
 
 
