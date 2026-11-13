@@ -113,8 +113,8 @@ if check_password():
         st.session_state.welcomed = set()
 
     prompts = {
-        "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣いで主人を支え、システムと連携してGoogleカレンダーに直接予定を自動登録する能力を持っています。",
-        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、戦略的に進言しつつ、必要に応じてカレンダー登録の司令を発令します。",
+        "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣いで主人を支え、Googleカレンダーに直接予定を自動登録する機能を持っています。",
+        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、戦略的に進言しつつ、必要に応じてカレンダー登録を行います。",
         "作戦会議": (
             "あなたは作戦会議システムです。必ず「専属執事」と「現代軍師」の両視点から発言してください。\n"
             "【出力形式の厳守】回答は必ず以下のタグで正確に分割して出力してください：\n\n"
@@ -133,9 +133,7 @@ if check_password():
         cal_rule = (
             f"\n\n【最重要機能：Googleカレンダー自動登録の実行】\n"
             f"現在の日付は {now_date_str} です。\n"
-            "あなたにはユーザーのGoogleカレンダーへ直接予定を登録する専用システムが直結しています。\n"
-            "ユーザーから予定の追加や登録を指示された場合、**「手動でインポートして」などと言っては絶対にダメです**。\n"
-            "必ず通常の返答の末尾に、以下の正確なコードブロックを含めて出力してください。そうすることでシステムが自動的にカレンダーへ書き込みます。\n\n"
+            "ユーザーから予定の追加や登録を指示された場合、通常の返答テキストの末尾に、必ず以下の正確なコードブロックを含めて出力してください。\n"
             "```calendar_event\n"
             "{\n"
             '  "summary": "予定のタイトル",\n'
@@ -236,6 +234,7 @@ if check_password():
                     ev = json.loads(parts[1].split("```")[0].strip())
                     srv = get_calendar_service()
                     if srv:
+                        target_calendar = st.secrets["google"].get("calendar_id", "primary")
                         body = {
                             "summary": ev.get("summary", "予定"),
                             "description": ev.get("description", ""),
@@ -243,7 +242,7 @@ if check_password():
                             "end": {"dateTime": ev["end"], "timeZone": "Asia/Tokyo"},
                             "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
                         }
-                        srv.events().insert(calendarId=st.secrets["google"].get("calendar_id", "primary"), body=body).execute()
+                        srv.events().insert(calendarId=target_calendar, body=body).execute()
                         reply += "\n\n✅ **[SYSTEM] カレンダー登録＆前日通知設定完了**"
                 except Exception as ex:
                     reply += f"\n\n⚠️ カレンダーエラー: {ex}"
@@ -255,5 +254,4 @@ if check_password():
             save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
-
 
