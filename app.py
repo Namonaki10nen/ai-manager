@@ -42,10 +42,6 @@ st.markdown("""
         padding: 12px 16px;
         margin-bottom: 12px;
     }
-    [data-testid="stChatMessage"] img {
-        border-radius: 50%;
-        object-fit: cover;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,7 +64,7 @@ def get_calendar_service():
     try:
         creds_json = json.loads(st.secrets["google"]["credentials"])
         creds = Credentials.from_service_account_info(
-            creds_json, scopes=["[https://www.googleapis.com/auth/calendar](https://www.googleapis.com/auth/calendar)"]
+            creds_json, scopes=["https://www.googleapis.com/auth/calendar"]
         )
         return build("calendar", "v3", credentials=creds)
     except Exception:
@@ -131,7 +127,6 @@ if check_password():
 
     base = prompts.get(mode, "あなたは優秀なアシスタントです。")
     
-    # 強制力を極限まで高めたカレンダー出力ルール
     cal_rule = ""
     if mode != "防衛AIステータス":
         now_date_str = datetime.now().strftime("%Y-%m-%d")
@@ -139,8 +134,8 @@ if check_password():
             f"\n\n【絶対遵守：カレンダー連携機能】\n"
             f"現在の日付は {now_date_str} です。\n"
             "ユーザーが「予定を入れて」「〜の予定」「スケジュール追加」など、カレンダー登録を意図する発言をした場合、"
-            "通常の返答テキストの末尾に、**必ず以下のような正確なJSON形式のコードブロックを含めてください**。\n"
-            "これを怠るとシステムエラーになります。日付（YYYY-MM-DDTHH:MM:SS）は必ず現在の基準から算出して埋めてください。\n\n"
+            "通常の返答テキストの末尾に、必ず以下のような正確なJSON形式のコードブロックを含めてください。\n"
+            "日付（YYYY-MM-DDTHH:MM:SS）は必ず現在の基準から算出して埋めてください。\n\n"
             "```calendar_event\n"
             "{\n"
             '  "summary": "予定のタイトル",\n'
@@ -160,11 +155,6 @@ if check_password():
     st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】</p>", unsafe_allow_html=True)
     messages = st.session_state.chat_history[mode]
 
-    u_avatar = "[https://api.dicebear.com/7.x/avataaars/svg?seed=User](https://api.dicebear.com/7.x/avataaars/svg?seed=User)"
-    b_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=Butler](https://api.dicebear.com/7.x/bottts/svg?seed=Butler)"
-    g_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=General](https://api.dicebear.com/7.x/bottts/svg?seed=General)"
-    s_avatar = "[https://api.dicebear.com/7.x/bottts/svg?seed=Strategy](https://api.dicebear.com/7.x/bottts/svg?seed=Strategy)"
-
     def render_assistant_reply(content, current_mode):
         if current_mode == "作戦会議" and "---BUTLER---" in content and "---GENERAL---" in content:
             try:
@@ -175,23 +165,23 @@ if check_password():
                 general_text = remaining[0].strip()
                 summary_text = remaining[1].strip() if len(remaining) > 1 else ""
 
-                with st.chat_message("assistant", avatar=b_avatar):
+                with st.chat_message("assistant", avatar="🛡️"):
                     st.markdown("**🛡️ 専属執事**")
                     st.write(butler_text)
 
-                with st.chat_message("assistant", avatar=g_avatar):
+                with st.chat_message("assistant", avatar="⚔️"):
                     st.markdown("**⚔️ 現代軍師**")
                     st.write(general_text)
 
                 if summary_text:
-                    with st.chat_message("assistant", avatar=s_avatar):
+                    with st.chat_message("assistant", avatar="📊"):
                         st.markdown("**📊 総括・作戦案**")
                         st.write(summary_text)
             except Exception:
-                with st.chat_message("assistant", avatar=b_avatar):
+                with st.chat_message("assistant", avatar="🛡️"):
                     st.write(content)
         else:
-            icon = b_avatar if current_mode == "専属執事" else (g_avatar if current_mode == "現代軍師" else s_avatar)
+            icon = "🛡️" if current_mode == "専属執事" else ("⚔️" if current_mode == "現代軍師" else "🤖")
             with st.chat_message("assistant", avatar=icon):
                 st.write(content)
 
@@ -215,7 +205,7 @@ if check_password():
 
     for m in messages:
         if m["role"] == "user":
-            with st.chat_message("user", avatar=u_avatar):
+            with st.chat_message("user", avatar="👤"):
                 st.write(m["content"])
         else:
             render_assistant_reply(m["content"], mode)
@@ -225,7 +215,7 @@ if check_password():
         st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
         save_shared_memory(st.session_state.shared_notes)
 
-        with st.chat_message("user", avatar=u_avatar):
+        with st.chat_message("user", avatar="👤"):
             st.write(prompt)
 
         try:
