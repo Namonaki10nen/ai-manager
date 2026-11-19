@@ -93,12 +93,35 @@ def fetch_available_models(api_key: str):
     except Exception:
         return fallback
 
+def is_jp_friendly_model(model_id: str) -> bool:
+    low = model_id.lower()
+    # Avoid models known to garble Japanese output
+    if "allam" in low or "whisper" in low or "guard" in low or "embedding" in low:
+        return False
+    return True
+
 def pick_relay_models(available_models, preferred_second_model):
-    second_model = preferred_second_model if preferred_second_model in available_models else (
-        "openai/gpt-oss-120b" if "openai/gpt-oss-120b" in available_models else available_models[0]
+    safe_models = [m for m in available_models if is_jp_friendly_model(m)]
+    if not safe_models:
+        safe_models = available_models
+
+    second_model = preferred_second_model if preferred_second_model in safe_models else (
+        "openai/gpt-oss-120b" if "openai/gpt-oss-120b" in safe_models else safe_models[0]
     )
-    candidates = [m for m in available_models if m != second_model]
-    first_model = candidates[0] if candidates else second_model
+
+    preferred_order_keywords = ["gpt-oss", "qwen", "llama-3.3", "llama-3.1", "gemma", "deepseek", "llama"]
+    candidates = [m for m in safe_models if m != second_model]
+    if candidates:
+        candidates.sort(
+            key=lambda m: next(
+                (i for i, kw in enumerate(preferred_order_keywords) if kw in m.lower()),
+                len(preferred_order_keywords)
+            )
+        )
+        first_model = candidates[0]
+    else:
+        first_model = second_model
+
     return first_model, second_model
 
 def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes, available_models, preferred_second_model):
@@ -115,7 +138,7 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes,
     butler_model, strategist_model = pick_relay_models(available_models, preferred_second_model)
 
     butler_sys = (
-        "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。"
+        "あなたは最高峰の専属執事です。自然な日本語で、丁寧かつ品格ある言葉遣い（〜でございます等）で主人を支えてください。"
         "主人の相談やテーマに対し、現状の整理、実務的な配慮、取り得る選択肢を簡潔かつ分かりやすく進言してください。" + notes_ctx
     )
     butler_input = f"直近の文脈:\n{hist_ctx}\n\n主人からの指示・相談:\n{clip_text(user_prompt, 800)}" if hist_ctx else clip_text(user_prompt, 800)
@@ -130,7 +153,7 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes,
     butler_text = clip_text(butler_res.choices[0].message.content or "", 1200)
 
     strategist_sys = (
-        "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。"
+        "あなたは冷徹かつ明晰な現代の軍師です。自然な日本語で、感情を排し、論理的かつ戦略的に進言してください。"
         "執事の進言を踏まえた上で、(1)見落としやすいリスクや前提の甘さ、(2)別解や勝ち筋・優先順位、"
         "(3)主人自身が決断するための「考える問い」を簡潔かつ鋭く提示してください。"
         "答えを丸投げせず、主人の思考を深める問いかけで締めてください。" + notes_ctx
@@ -195,8 +218,8 @@ if check_password():
         st.session_state.welcomed = set()
 
     prompts = {
-        "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。",
-        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。",
+        "専属執事": "あなたは最高峰の専属執事です。自然な日本語で、丁寧かつ品格ある言葉遣い（〜でございます等）で主人を支えてください。",
+        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。自然な日本語で、感情を排し、論理的かつ戦略的に進言してください。",
         "防衛AIステータス": "あなたは独立した防衛管理AIです。機械的・客観的なシステムレポートのみを行ってください。"
     }
 
