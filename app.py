@@ -76,7 +76,26 @@ def save_shared_memory(notes):
     except Exception:
         pass
 
-def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes):
+@st.cache_data(ttl=3600)
+def fetch_available_models(api_key: str):
+    fallback = ["openai/gpt-oss-120b"]
+    try:
+        tmp_client = Groq(api_key=api_key)
+        models_resp = tmp_client.models.list()
+        ids = [m.id for m in models_resp.data if getattr(m, "id", None)]
+        return ids if ids else fallback
+    except Exception:
+        return fallback
+
+def pick_relay_models(available_models, preferred_second_model):
+    second_model = preferred_second_model if preferred_second_model in available_models else (
+        "openai/gpt-oss-120b" if "openai/gpt-oss-120b" in available_models else available_models[0]
+    )
+    candidates = [m for m in available_models if m != second_model]
+    first_model = candidates[0] if candidates else second_model
+    return first_model, second_model
+
+def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes, available_models, preferred_second_model):
     notes_ctx = ""
     if shared_notes:
         notes_ctx = "\n\n【共有ノート（これまでの経緯）】\n" + "\n".join(shared_notes[-10:])
@@ -86,8 +105,8 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes)
         recent_history.append(f"{m['role']}: {m['content']}")
     hist_ctx = "\n".join(recent_history)
 
-    # 1st model: Butler perspective
-    butler_model = "llama-3.1-8b-instant"
+    butler_model, strategist_model = pick_relay_models(available_models, preferred_second_model)
+
     butler_sys = (
         "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。"
         "主人の相談やテーマに対し、現状の整理、実務的な配慮、取り得る選択肢を分かりやすく進言してください。" + notes_ctx
@@ -102,8 +121,6 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes)
     )
     butler_text = butler_res.choices[0].message.content.strip()
 
-    # 2nd model: Modern Strategist perspective
-    strategist_model = "openai/gpt-oss-120b"
     strategist_sys = (
         "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。"
         "執事の進言を踏まえた上で、(1)見落としやすいリスクや前提の甘さ、(2)別解や勝ち筋・優先順位、"
@@ -137,6 +154,7 @@ if check_password():
         st.stop()
 
     client = Groq(api_key=api_key)
+    available_models = fetch_available_models(api_key)
 
     st.sidebar.markdown("<h3 style='color: #38bdf8;'>🔧 司令部コントロール</h3>", unsafe_allow_html=True)
     mode = st.sidebar.radio(
@@ -144,12 +162,11 @@ if check_password():
         ["作戦会議", "専属執事", "現代軍師", "防衛AIステータス"]
     )
 
+    default_idx = available_models.index("openai/gpt-oss-120b") if "openai/gpt-oss-120b" in available_models else 0
     selected_model = st.sidebar.selectbox(
-        "単一モード用エンジン",
-        [
-            "openai/gpt-oss-120b",
-            "llama-3.1-8b-instant",
-        ]
+        "使用エンジン（利用可能モデルから自動取得）",
+        available_models,
+        index=default_idx
     )
 
     if st.sidebar.button("共有ノートをクリア"):
@@ -181,7 +198,12 @@ if check_password():
 
     system_prompt = base + notes
 
-    engine_label = "執事(llama-3.1-8b) → 軍師(gpt-oss-120b)" if mode == "作戦会議" else selected_model
+    if mode == "作戦会議":
+        m1, m2 = pick_relay_models(available_models, selected_model)
+        engine_label = f"執事({m1}) → 軍師({m2})"
+    else:
+        engine_label = selected_model
+
     st.markdown(
         f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】 / ENGINE : {engine_label}</p>",
         unsafe_allow_html=True
@@ -252,7 +274,10 @@ if check_password():
         try:
             if mode == "作戦会議":
                 with st.spinner("作戦会議：専属執事 → 現代軍師の別モデル合議を実行中..."):
-                    reply = run_butler_strategist_relay(client, prompt, messages[:-1], st.session_state.shared_notes)
+                    reply = run_butler_strategist_relay(
+                        client, prompt, messages[:-1], st.session_state.shared_notes,
+                        available_models, selected_model
+                    )
             else:
                 full_msgs = [{"role": "system", "content": system_prompt}]
                 for m in messages:
@@ -271,4 +296,3 @@ if check_password():
             save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
-
