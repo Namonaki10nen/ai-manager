@@ -2,8 +2,6 @@ import json
 import os
 import streamlit as st
 from groq import Groq
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 from datetime import datetime
 
 st.set_page_config(
@@ -60,16 +58,6 @@ def check_password():
         return False
     return True
 
-def get_calendar_service():
-    try:
-        creds_json = json.loads(st.secrets["google"]["credentials"])
-        creds = Credentials.from_service_account_info(
-            creds_json, scopes=["https://www.googleapis.com/auth/calendar"]
-        )
-        return build("calendar", "v3", credentials=creds)
-    except Exception:
-        return None
-
 MEMORY_FILE = "shared_memory.json"
 
 def load_shared_memory():
@@ -105,7 +93,7 @@ if check_password():
         st.session_state.chat_history = {}
     if mode not in st.session_state.chat_history:
         st.session_state.chat_history[mode] = []
-        
+
     if "shared_notes" not in st.session_state:
         st.session_state.shared_notes = load_shared_memory()
 
@@ -113,8 +101,8 @@ if check_password():
         st.session_state.welcomed = set()
 
     prompts = {
-        "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣いで主人を支え、Googleカレンダーに直接予定を自動登録する機能を持っています。",
-        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、戦略的に進言しつつ、必要に応じてカレンダー登録を行います。",
+        "専属執事": "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。",
+        "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。",
         "作戦会議": (
             "あなたは作戦会議システムです。必ず「専属執事」と「現代軍師」の両視点から発言してください。\n"
             "【出力形式の厳守】回答は必ず以下のタグで正確に分割して出力してください：\n\n"
@@ -126,29 +114,11 @@ if check_password():
     }
 
     base = prompts.get(mode, "あなたは優秀なアシスタントです。")
-    
-    cal_rule = ""
-    if mode != "防衛AIステータス":
-        now_date_str = datetime.now().strftime("%Y-%m-%d")
-        cal_rule = (
-            f"\n\n【最重要機能：Googleカレンダー自動登録の実行】\n"
-            f"現在の日付は {now_date_str} です。\n"
-            "ユーザーから予定の追加や登録を指示された場合、通常の返答テキストの末尾に、必ず以下の正確なコードブロックを含めて出力してください。\n"
-            "```calendar_event\n"
-            "{\n"
-            '  "summary": "予定のタイトル",\n'
-            '  "start": "2026-11-14T15:00:00",\n'
-            '  "end": "2026-11-14T16:00:00",\n'
-            '  "description": "詳細"\n'
-            "}\n"
-            "```"
-        )
-
     notes = ""
     if st.session_state.shared_notes:
         notes = "\n\n【司令部の共有ノート・これまでの経緯（長期記憶）】\n" + "\n".join(st.session_state.shared_notes[-10:])
 
-    system_prompt = base + cal_rule + notes
+    system_prompt = base + notes
 
     st.markdown(f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】</p>", unsafe_allow_html=True)
     messages = st.session_state.chat_history[mode]
@@ -158,7 +128,7 @@ if check_password():
             try:
                 parts = content.split("---GENERAL---")
                 butler_text = parts[0].replace("---BUTLER---", "").strip()
-                
+
                 remaining = parts[1].split("---SUMMARY---")
                 general_text = remaining[0].strip()
                 summary_text = remaining[1].strip() if len(remaining) > 1 else ""
@@ -187,7 +157,7 @@ if check_password():
         st.session_state.welcomed.add(mode)
         now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
         welcome_prompt = f"現在時刻は {now_str} です。主人（ユーザー）が司令部にログインしました。これまでの共有ノートの記憶を踏まえ、本日の状況やサポートの意気込みを簡潔にブリーフィング（挨拶）してください。"
-        
+
         try:
             res = client.chat.completions.create(
                 model="openai/gpt-oss-120b",
@@ -226,26 +196,6 @@ if check_password():
                 messages=full_msgs
             )
             reply = res.choices[0].message.content
-
-            if "```calendar_event" in reply and mode != "防衛AIステータス":
-                parts = reply.split("```calendar_event")
-                reply = parts[0].strip()
-                try:
-                    ev = json.loads(parts[1].split("```")[0].strip())
-                    srv = get_calendar_service()
-                    if srv:
-                        target_calendar = st.secrets["google"].get("calendar_id", "primary")
-                        body = {
-                            "summary": ev.get("summary", "予定"),
-                            "description": ev.get("description", ""),
-                            "start": {"dateTime": ev["start"], "timeZone": "Asia/Tokyo"},
-                            "end": {"dateTime": ev["end"], "timeZone": "Asia/Tokyo"},
-                            "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 1440}]}
-                        }
-                        srv.events().insert(calendarId=target_calendar, body=body).execute()
-                        reply += "\n\n✅ **[SYSTEM] カレンダー登録＆前日通知設定完了**"
-                except Exception as ex:
-                    reply += f"\n\n⚠️ カレンダーエラー: {ex}"
 
             render_assistant_reply(reply, mode)
 
