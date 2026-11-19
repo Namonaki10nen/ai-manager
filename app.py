@@ -87,7 +87,7 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes)
     hist_ctx = "\n".join(recent_history)
 
     # 1st model: Butler perspective
-    butler_model = "llama-3.3-70b-versatile"
+    butler_model = "llama-3.1-8b-instant"
     butler_sys = (
         "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。"
         "主人の相談やテーマに対し、現状の整理、実務的な配慮、取り得る選択肢を分かりやすく進言してください。" + notes_ctx
@@ -148,7 +148,7 @@ if check_password():
         "単一モード用エンジン",
         [
             "openai/gpt-oss-120b",
-            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
         ]
     )
 
@@ -181,7 +181,7 @@ if check_password():
 
     system_prompt = base + notes
 
-    engine_label = "執事(llama-3.3-70b) → 軍師(gpt-oss-120b)" if mode == "作戦会議" else selected_model
+    engine_label = "執事(llama-3.1-8b) → 軍師(gpt-oss-120b)" if mode == "作戦会議" else selected_model
     st.markdown(
         f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】 / ENGINE : {engine_label}</p>",
         unsafe_allow_html=True
