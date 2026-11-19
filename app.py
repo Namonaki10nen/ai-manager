@@ -72,9 +72,15 @@ def load_shared_memory():
 def save_shared_memory(notes):
     try:
         with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(notes, f, ensure_ascii=False, indent=2)
+            json.dump(notes[-50:], f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+def clip_text(text: str, max_chars: int = 800) -> str:
+    text = (text or "").strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "...(省略)"
 
 @st.cache_data(ttl=3600)
 def fetch_available_models(api_key: str):
@@ -98,28 +104,30 @@ def pick_relay_models(available_models, preferred_second_model):
 def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes, available_models, preferred_second_model):
     notes_ctx = ""
     if shared_notes:
-        notes_ctx = "\n\n【共有ノート（これまでの経緯）】\n" + "\n".join(shared_notes[-10:])
+        clipped_notes = [clip_text(n, 160) for n in shared_notes[-6:]]
+        notes_ctx = "\n\n【共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
 
     recent_history = []
-    for m in history_msgs[-6:]:
-        recent_history.append(f"{m['role']}: {m['content']}")
+    for m in history_msgs[-4:]:
+        recent_history.append(f"{m['role']}: {clip_text(m['content'], 350)}")
     hist_ctx = "\n".join(recent_history)
 
     butler_model, strategist_model = pick_relay_models(available_models, preferred_second_model)
 
     butler_sys = (
         "あなたは最高峰の専属執事です。丁寧で品格ある言葉遣い（〜でございます等）で主人を支えてください。"
-        "主人の相談やテーマに対し、現状の整理、実務的な配慮、取り得る選択肢を分かりやすく進言してください。" + notes_ctx
+        "主人の相談やテーマに対し、現状の整理、実務的な配慮、取り得る選択肢を簡潔かつ分かりやすく進言してください。" + notes_ctx
     )
-    butler_input = f"直近の文脈:\n{hist_ctx}\n\n主人からの指示・相談:\n{user_prompt}" if hist_ctx else user_prompt
+    butler_input = f"直近の文脈:\n{hist_ctx}\n\n主人からの指示・相談:\n{clip_text(user_prompt, 800)}" if hist_ctx else clip_text(user_prompt, 800)
     butler_res = client.chat.completions.create(
         model=butler_model,
+        max_tokens=900,
         messages=[
             {"role": "system", "content": butler_sys},
             {"role": "user", "content": butler_input}
         ]
     )
-    butler_text = butler_res.choices[0].message.content.strip()
+    butler_text = clip_text(butler_res.choices[0].message.content or "", 1200)
 
     strategist_sys = (
         "あなたは冷徹かつ明晰な現代の軍師です。感情を排し、論理的かつ戦略的に進言してください。"
@@ -128,17 +136,18 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes,
         "答えを丸投げせず、主人の思考を深める問いかけで締めてください。" + notes_ctx
     )
     strategist_input = (
-        f"主人のテーマ:\n{user_prompt}\n\n"
+        f"主人のテーマ:\n{clip_text(user_prompt, 600)}\n\n"
         f"専属執事（{butler_model}）の進言:\n{butler_text}"
     )
     strategist_res = client.chat.completions.create(
         model=strategist_model,
+        max_tokens=1100,
         messages=[
             {"role": "system", "content": strategist_sys},
             {"role": "user", "content": strategist_input}
         ]
     )
-    strategist_text = strategist_res.choices[0].message.content.strip()
+    strategist_text = (strategist_res.choices[0].message.content or "").strip()
 
     return (
         f"---BUTLER ({butler_model})---\n{butler_text}\n\n"
@@ -194,7 +203,8 @@ if check_password():
     base = prompts.get(mode, "あなたは優秀なアシスタントです。")
     notes = ""
     if st.session_state.shared_notes:
-        notes = "\n\n【司令部の共有ノート・これまでの経緯（長期記憶）】\n" + "\n".join(st.session_state.shared_notes[-12:])
+        clipped_notes = [clip_text(n, 160) for n in st.session_state.shared_notes[-6:]]
+        notes = "\n\n【司令部の共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
 
     system_prompt = base + notes
 
@@ -246,6 +256,7 @@ if check_password():
         try:
             res = client.chat.completions.create(
                 model=selected_model,
+                max_tokens=600,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": welcome_prompt}
@@ -265,7 +276,7 @@ if check_password():
 
     if prompt := st.chat_input("司令部へ指示または相談を入力してください..."):
         messages.append({"role": "user", "content": prompt})
-        st.session_state.shared_notes.append(f"[{mode}] ユーザー: {prompt}")
+        st.session_state.shared_notes.append(f"[{mode}] ユーザー: {clip_text(prompt, 120)}")
         save_shared_memory(st.session_state.shared_notes)
 
         with st.chat_message("user", avatar="👤"):
@@ -280,11 +291,12 @@ if check_password():
                     )
             else:
                 full_msgs = [{"role": "system", "content": system_prompt}]
-                for m in messages:
-                    full_msgs.append({"role": m["role"], "content": m["content"]})
+                for m in messages[-8:]:
+                    full_msgs.append({"role": m["role"], "content": clip_text(m["content"], 600)})
 
                 res = client.chat.completions.create(
                     model=selected_model,
+                    max_tokens=1100,
                     messages=full_msgs
                 )
                 reply = res.choices[0].message.content
@@ -292,7 +304,7 @@ if check_password():
             render_assistant_reply(reply, mode)
 
             messages.append({"role": "assistant", "content": reply})
-            st.session_state.shared_notes.append(f"[{mode}] AI: {reply[:40]}...")
+            st.session_state.shared_notes.append(f"[{mode}] AI: {clip_text(reply, 120)}")
             save_shared_memory(st.session_state.shared_notes)
         except Exception as e:
             st.error(f"エラー: {e}")
