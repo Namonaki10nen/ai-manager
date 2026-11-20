@@ -6,39 +6,186 @@ from groq import Groq
 
 st.set_page_config(
     page_title="MUSE Command - Multi-AI Hub",
-    page_icon="✨",
+    page_icon="⚡",
     layout="centered"
 )
 
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
     .stApp {
-        background-color: #0b0f19;
+        background:
+            radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.14) 0%, transparent 45%),
+            radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
+            linear-gradient(180deg, #070b14 0%, #0b1120 100%);
         color: #e2e8f0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
+
+    /* サイドバー */
     [data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 1px solid #1e293b;
+        background: linear-gradient(180deg, #0c1322 0%, #080d18 100%);
+        border-right: 1px solid rgba(56, 189, 248, 0.18);
     }
-    .stTextInput input, .stChatInput input {
-        background-color: #1e293b !important;
+
+    /* 入力欄 */
+    .stTextInput input, .stChatInput textarea, .stChatInput input {
+        background: rgba(15, 23, 42, 0.88) !important;
         color: #f8fafc !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
+        border: 1px solid rgba(148, 163, 184, 0.25) !important;
+        border-radius: 12px !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .stButton button {
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: bold;
+    .stTextInput input:focus, .stChatInput textarea:focus, .stChatInput input:focus {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
     }
+
+    /* ボタン */
+    .stButton > button {
+        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 55%, #4f46e5 100%);
+        color: #ffffff !important;
+        border: 1px solid rgba(125, 211, 252, 0.35);
+        border-radius: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        padding: 0.55rem 1rem;
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.28);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(56, 189, 248, 0.35);
+    }
+
+    /* ログインカード */
+    .login-shell {
+        max-width: 440px;
+        margin: 2.5rem auto 1rem auto;
+        padding: 2rem 1.6rem;
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(56, 189, 248, 0.28);
+        border-radius: 22px;
+        box-shadow:
+            0 20px 50px rgba(0, 0, 0, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .login-badge {
+        display: inline-block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        padding: 0.22rem 0.65rem;
+        border-radius: 999px;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.75rem;
+    }
+    .login-title {
+        font-size: 1.65rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        background: linear-gradient(90deg, #f8fafc 0%, #7dd3fc 60%, #a5b4fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0 0 0.4rem 0;
+    }
+    .login-sub {
+        font-size: 0.88rem;
+        color: #94a3b8;
+        margin-bottom: 1.4rem;
+        line-height: 1.5;
+    }
+
+    /* トーク画面ヘッダー＆ステータスバー */
+    .cmd-header {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(23, 37, 84, 0.65) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 18px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    .cmd-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .cmd-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #f8fafc;
+        margin: 0;
+        letter-spacing: -0.01em;
+    }
+    .cmd-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.14);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        padding: 0.22rem 0.6rem;
+        border-radius: 999px;
+    }
+    .cmd-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.76rem;
+        color: #94a3b8;
+        margin-top: 0.55rem;
+        line-height: 1.45;
+    }
+
+    /* チャット吹き出し */
     [data-testid="stChatMessage"] {
-        background: linear-gradient(135deg, #111827 0%, #1a2333 100%);
-        border: 1px solid #1f2937;
-        border-radius: 14px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
+        border-radius: 16px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.85rem;
+        line-height: 1.65;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    }
+    [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+        background: linear-gradient(135deg, rgba(30, 58, 138, 0.55) 0%, rgba(15, 23, 42, 0.9) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.35);
+    }
+    [data-testid="stChatMessage"]:has([aria-label="Chat message from assistant"]) {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(17, 24, 39, 0.95) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    /* 作戦会議の役割カード */
+    .role-box-butler {
+        background: rgba(56, 189, 248, 0.06);
+        border-left: 3px solid #38bdf8;
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+        margin-bottom: 0.6rem;
+    }
+    .role-box-strategist {
+        background: rgba(244, 63, 94, 0.07);
+        border-left: 3px solid #fb7185;
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+    }
+    .role-tag-butler {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #7dd3fc;
+        margin-bottom: 0.35rem;
+        display: block;
+    }
+    .role-tag-strategist {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #fda4af;
+        margin-bottom: 0.35rem;
+        display: block;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -47,14 +194,23 @@ def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     if not st.session_state.authenticated:
-        st.markdown("<h2 style='text-align: center; color: #38bdf8;'>✨ MUSE COMMAND ACCESS</h2>", unsafe_allow_html=True)
-        password = st.text_input("アクセスパスワードを入力", type="password")
-        if st.button("システム認証", use_container_width=True):
-            if password == st.secrets.get("PASSWORD", ""):
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("パスワードが違います")
+        st.markdown("""
+        <div class="login-shell">
+            <div class="login-badge">● SECURITY GATEWAY // ONLINE</div>
+            <h2 class="login-title">MUSE COMMAND</h2>
+            <p class="login-sub">マルチAI司令部システムへアクセスするには認証パスコードを入力してください。</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_l, col_m, col_r = st.columns([1, 6, 1])
+        with col_m:
+            password = st.text_input("アクセスパスワード", type="password", placeholder="Passcode", label_visibility="collapsed")
+            if st.button("システム認証を実行", use_container_width=True):
+                if password == st.secrets.get("PASSWORD", ""):
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("パスコードが一致しません")
         return False
     return True
 
@@ -95,7 +251,6 @@ def fetch_available_models(api_key: str):
 
 def is_jp_friendly_model(model_id: str) -> bool:
     low = model_id.lower()
-    # Avoid models known to garble Japanese output
     if "allam" in low or "whisper" in low or "guard" in low or "embedding" in low:
         return False
     return True
@@ -178,8 +333,6 @@ def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes,
     )
 
 if check_password():
-    st.markdown("<h1 style='color: #38bdf8; font-size: 1.6rem;'>✨ MUSE HUB : マルチAI司令部</h1>", unsafe_allow_html=True)
-
     api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
         st.error("GROQ_API_KEYが設定されていません")
@@ -188,7 +341,7 @@ if check_password():
     client = Groq(api_key=api_key)
     available_models = fetch_available_models(api_key)
 
-    st.sidebar.markdown("<h3 style='color: #38bdf8;'>🔧 司令部コントロール</h3>", unsafe_allow_html=True)
+    st.sidebar.markdown("### 🔧 司令部コントロール")
     mode = st.sidebar.radio(
         "モード選択",
         ["作戦会議", "専属執事", "現代軍師", "防衛AIステータス"]
@@ -196,12 +349,16 @@ if check_password():
 
     default_idx = available_models.index("openai/gpt-oss-120b") if "openai/gpt-oss-120b" in available_models else 0
     selected_model = st.sidebar.selectbox(
-        "使用エンジン（利用可能モデルから自動取得）",
+        "使用エンジン（自動取得）",
         available_models,
         index=default_idx
     )
 
-    if st.sidebar.button("共有ノートをクリア"):
+    if "shared_notes" not in st.session_state:
+        st.session_state.shared_notes = load_shared_memory()
+
+    st.sidebar.markdown("---")
+    if st.sidebar.button("共有ノートをクリア", use_container_width=True):
         st.session_state.shared_notes = []
         save_shared_memory([])
         st.rerun()
@@ -210,9 +367,6 @@ if check_password():
         st.session_state.chat_history = {}
     if mode not in st.session_state.chat_history:
         st.session_state.chat_history[mode] = []
-
-    if "shared_notes" not in st.session_state:
-        st.session_state.shared_notes = load_shared_memory()
 
     if "welcomed" not in st.session_state:
         st.session_state.welcomed = set()
@@ -233,14 +387,23 @@ if check_password():
 
     if mode == "作戦会議":
         m1, m2 = pick_relay_models(available_models, selected_model)
-        engine_label = f"執事({m1}) → 軍師({m2})"
+        engine_label = f"{m1} → {m2}"
     else:
         engine_label = selected_model
 
-    st.markdown(
-        f"<p style='color: #38bdf8; font-weight: bold;'>ACTIVE MODE : 【 {mode} 】 / ENGINE : {engine_label}</p>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"""
+    <div class="cmd-header">
+        <div class="cmd-title-row">
+            <h1 class="cmd-title">⚡ MUSE COMMAND</h1>
+            <span class="cmd-pill">MODE: {mode}</span>
+        </div>
+        <div class="cmd-meta">
+            ENGINE: {engine_label}<br>
+            SHARED MEMORY: {len(st.session_state.shared_notes)} LOGS ACTIVE
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     messages = st.session_state.chat_history[mode]
 
     def render_assistant_reply(content, current_mode):
@@ -253,12 +416,17 @@ if check_password():
                 strat_part = parts[1]
                 strat_model_name, strat_body = strat_part.split(")---\n", 1)
 
-                with st.chat_message("assistant", avatar="🛡️"):
-                    st.markdown(f"**🛡️ 専属執事（{butler_model_name}）**")
+                with st.chat_message("assistant", avatar="⚔️"):
+                    st.markdown(
+                        f'<div class="role-box-butler"><span class="role-tag-butler">🛡️ 専属執事 ({butler_model_name})</span></div>',
+                        unsafe_allow_html=True
+                    )
                     st.write(butler_body.strip())
 
-                with st.chat_message("assistant", avatar="⚔️"):
-                    st.markdown(f"**⚔️ 現代軍師（{strat_model_name}）**")
+                    st.markdown(
+                        f'<div class="role-box-strategist"><span class="role-tag-strategist">⚔️ 現代軍師 ({strat_model_name})</span></div>',
+                        unsafe_allow_html=True
+                    )
                     st.write(strat_body.strip())
                 return
             except Exception:
