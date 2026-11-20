@@ -1,11 +1,17 @@
 import json
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import streamlit as st
 from groq import Groq
 
+JST = ZoneInfo("Asia/Tokyo")
+
+def now_jst() -> datetime:
+    return datetime.now(JST)
+
 st.set_page_config(
-    page_title="MUSE Command - Multi-AI Hub",
+    page_title="Command Center - Multi-AI Hub",
     page_icon="⚡",
     layout="centered"
 )
@@ -196,9 +202,9 @@ def check_password():
     if not st.session_state.authenticated:
         st.markdown("""
         <div class="login-shell">
-            <div class="login-badge">● SECURITY GATEWAY // ONLINE</div>
-            <h2 class="login-title">MUSE COMMAND</h2>
-            <p class="login-sub">マルチAI司令部システムへアクセスするには認証パスコードを入力してください。</p>
+            <div class="login-badge">● SECURITY GATEWAY // JST ONLINE</div>
+            <h2 class="login-title">COMMAND CENTER</h2>
+            <p class="login-sub">司令部システムへアクセスするには認証パスコードを入力してください。</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -280,10 +286,11 @@ def pick_relay_models(available_models, preferred_second_model):
     return first_model, second_model
 
 def run_butler_strategist_relay(client, user_prompt, history_msgs, shared_notes, available_models, preferred_second_model):
-    notes_ctx = ""
+    jst_now_str = now_jst().strftime("%Y年%m月%d日 %H:%M JST")
+    notes_ctx = f"\n\n【現在時刻（日本時間）】{jst_now_str}"
     if shared_notes:
         clipped_notes = [clip_text(n, 160) for n in shared_notes[-6:]]
-        notes_ctx = "\n\n【共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
+        notes_ctx += "\n\n【共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
 
     recent_history = []
     for m in history_msgs[-4:]:
@@ -371,6 +378,9 @@ if check_password():
     if "welcomed" not in st.session_state:
         st.session_state.welcomed = set()
 
+    current_jst = now_jst()
+    jst_str = current_jst.strftime("%Y年%m月%d日 %H:%M JST")
+
     prompts = {
         "専属執事": "あなたは最高峰の専属執事です。自然な日本語で、丁寧かつ品格ある言葉遣い（〜でございます等）で主人を支えてください。",
         "現代軍師": "あなたは冷徹かつ明晰な現代の軍師です。自然な日本語で、感情を排し、論理的かつ戦略的に進言してください。",
@@ -378,10 +388,10 @@ if check_password():
     }
 
     base = prompts.get(mode, "あなたは優秀なアシスタントです。")
-    notes = ""
+    notes = f"\n\n【現在時刻（日本時間）】{jst_str}"
     if st.session_state.shared_notes:
         clipped_notes = [clip_text(n, 160) for n in st.session_state.shared_notes[-6:]]
-        notes = "\n\n【司令部の共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
+        notes += "\n\n【司令部の共有ノート（抜粋）】\n" + "\n".join(clipped_notes)
 
     system_prompt = base + notes
 
@@ -394,10 +404,11 @@ if check_password():
     st.markdown(f"""
     <div class="cmd-header">
         <div class="cmd-title-row">
-            <h1 class="cmd-title">⚡ MUSE COMMAND</h1>
+            <h1 class="cmd-title">⚡ COMMAND CENTER</h1>
             <span class="cmd-pill">MODE: {mode}</span>
         </div>
         <div class="cmd-meta">
+            TIME: {jst_str}<br>
             ENGINE: {engine_label}<br>
             SHARED MEMORY: {len(st.session_state.shared_notes)} LOGS ACTIVE
         </div>
@@ -438,9 +449,8 @@ if check_password():
 
     if mode not in st.session_state.welcomed and not messages:
         st.session_state.welcomed.add(mode)
-        now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
         welcome_prompt = (
-            f"現在時刻は {now_str} です。ユーザーが司令部にログインしました。"
+            f"現在時刻は日本時間で {jst_str} です。ユーザーが司令部にログインしました。"
             "これまでの共有ノートの記憶を踏まえ、本日の状況やサポートの意気込みを簡潔にブリーフィングしてください。"
         )
 
